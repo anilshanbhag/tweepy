@@ -4,6 +4,7 @@
 
 import os
 import mimetypes
+import urllib2
 
 from tweepy.binder import bind_api
 from tweepy.error import TweepError
@@ -77,7 +78,7 @@ class API(object):
         allowed_param = ['id', 'count', 'page'],
         require_auth = True
     )
-	
+
     """/related_results/show/:id.format"""
     related_results = bind_api(
         path = '/related_results/show/{id}.json',
@@ -715,22 +716,33 @@ class API(object):
     def _pack_image(filename, max_size):
         """Pack image from file into multipart-formdata post body"""
         # image must be less than 700kb in size
-        try:
-            if os.path.getsize(filename) > (max_size * 1024):
-                raise TweepError('File is too big, must be less than 700kb.')
-        except os.error, e:
-            raise TweepError('Unable to access file')
+        # support image from web
+        if filename.startswith('http://') or filename.startswith('https://'):
+            try:
+                fp = urllib2.urlopen(filename)
+                file_type = fp.headers.get('Content-Type')
+                if file_type not in ['image/gif', 'image/jpeg', 'image/png']:
+                    raise TweepError('Invalid file type for image: %s' % file_type)
+            except:
+                raise TweepError('Unable to access URL')
+        else:
+            try:
+                if os.path.getsize(filename) > (max_size * 1024):
+                    raise TweepError('File is too big, must be less than 700kb.')
+            except os.error, e:
+                raise TweepError('Unable to access file')
 
-        # image must be gif, jpeg, or png
-        file_type = mimetypes.guess_type(filename)
-        if file_type is None:
-            raise TweepError('Could not determine file type')
-        file_type = file_type[0]
-        if file_type not in ['image/gif', 'image/jpeg', 'image/png']:
-            raise TweepError('Invalid file type for image: %s' % file_type)
+            # image must be gif, jpeg, or png
+            file_type = mimetypes.guess_type(filename)
+            if file_type is None:
+                raise TweepError('Could not determine file type')
+            file_type = file_type[0]
+            if file_type not in ['image/gif', 'image/jpeg', 'image/png']:
+                raise TweepError('Invalid file type for image: %s' % file_type)
 
-        # build the mulitpart-formdata body
-        fp = open(filename, 'rb')
+            # build the mulitpart-formdata body
+            fp = open(filename, 'rb')
+
         BOUNDARY = 'Tw3ePy'
         body = []
         body.append('--' + BOUNDARY)
